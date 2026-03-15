@@ -15,7 +15,7 @@ def load_config():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except: 
+        except:
             pass
     return {"error_tag": "gmberro", "auto_rebuild": False, "last_build_day": -1}
 
@@ -27,7 +27,7 @@ class FilteredDeckManager(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
         self.mw = parent
-        self.setWindowTitle("Gerenciador USMLE")
+        self.setWindowTitle("USMLE Manager")
         self.config = load_config()
         self.date_str = datetime.now().strftime("%d/%m/%y")
         self.setup_ui()
@@ -35,13 +35,13 @@ class FilteredDeckManager(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout()
 
-        layout.addWidget(QLabel(f"<b>Data: {self.date_str}</b>"))
-        layout.addWidget(QLabel("Tag de Erro:"))
+        layout.addWidget(QLabel(f"<b>Date: {self.date_str}</b>"))
+        layout.addWidget(QLabel("Error Tag:"))
         self.tag_input = QLineEdit(self.config["error_tag"])
         layout.addWidget(self.tag_input)
 
         # Checkbox de reconstrução automática
-        self.auto_rebuild_checkbox = QCheckBox("Reconstrução automática diária")
+        self.auto_rebuild_checkbox = QCheckBox("Automatic daily rebuild")
         self.auto_rebuild_checkbox.setChecked(self.config.get("auto_rebuild", False))
         self.auto_rebuild_checkbox.stateChanged.connect(self.on_auto_rebuild_toggled)
         layout.addWidget(self.auto_rebuild_checkbox)
@@ -74,12 +74,12 @@ class FilteredDeckManager(QDialog):
         layout.addWidget(self.progress_bar)
 
         # Botões
-        self.btn_build = QPushButton("Construir Decks Diários")
+        self.btn_build = QPushButton("Build Daily Decks")
         self.btn_build.setStyleSheet("background-color: #2ecc71; color: white; font-weight: bold; min-height: 30px;")
         self.btn_build.clicked.connect(self.build_decks)
         layout.addWidget(self.btn_build)
 
-        self.btn_empty = QPushButton("Esvaziar e Apagar Decks")
+        self.btn_empty = QPushButton("Clear & Remove Decks")
         self.btn_empty.setStyleSheet("background-color: #e74c3c; color: white; min-height: 30px;")
         self.btn_empty.clicked.connect(self.empty_decks)
         layout.addWidget(self.btn_empty)
@@ -126,15 +126,15 @@ class FilteredDeckManager(QDialog):
 
         # Lista ordenada de decks para manter a ordem de criação
         decks_to_create = [
-            (f"00 - {error_tag} + HY (1,2,3) [{self.date_str}]", 
+            (f"00 - {error_tag} + HY (1,2,3) [{self.date_str}]",
              f"tag:*{error_tag} (tag:*1-HighYield or tag:*2-RelativelyHighYield or tag:*3-HighYield-temporary) is:due"),
-            
-            (f"01 - HY Cards [{self.date_str}]", 
+
+            (f"01 - HY Cards [{self.date_str}]",
              f"tag:*1-HighYield (is:learn or is:due) prop:due<=0"),
-            
-            (f"02 - Relative HY Cards [{self.date_str}]", 
+
+            (f"02 - Relative HY Cards [{self.date_str}]",
              f"tag:*2-RelativelyHighYield (is:learn or is:due) prop:due<=0"),
-            
+
             (f"03 - Temporary HY Cards [{self.date_str}]",
              f"tag:*3-HighYield-temporary (is:learn or is:due) prop:due<=0"),
 
@@ -144,43 +144,43 @@ class FilteredDeckManager(QDialog):
 
         # Mostrar barra de progresso
         self.show_progress(True)
-        self.update_progress(0, "Iniciando criação de decks...")
+        self.update_progress(0, "Starting deck creation...")
 
         def create_decks_op(col):
             """Operação que roda em background"""
             total_decks = len(decks_to_create)
-            
+
             # Criar decks na ordem especificada
             for idx, (name, query) in enumerate(decks_to_create, 1):
                 # Atualizar progresso
                 progress = int((idx - 0.5) / total_decks * 100)
                 mw.taskman.run_on_main(
-                    lambda p=progress, n=name: self.update_progress(p, f"Criando: {n[:30]}...")
+                    lambda p=progress, n=name: self.update_progress(p, f"Creating: {n[:30]}...")
                 )
-                
+
                 # Criar deck filtrado
                 did = col.decks.new_filtered(name)
                 deck = col.decks.get(did)
-                
+
                 # Configurar a busca
                 deck['terms'][0][0] = query
                 deck['terms'][0][1] = 999
                 deck['resched'] = True
-                
+
                 col.decks.save(deck)
                 col.sched.rebuild_filtered_deck(did)
-                
+
                 # Atualizar progresso após conclusão
                 progress = int(idx / total_decks * 100)
                 mw.taskman.run_on_main(
-                    lambda p=progress: self.update_progress(p, f"Deck {idx}/{total_decks} criado!")
+                    lambda p=progress, i=idx, t=total_decks: self.update_progress(p, f"Deck {i}/{t} created!")
                 )
-            
+
             return len(decks_to_create)
 
         def on_success(count):
             """Callback quando a operação termina com sucesso"""
-            self.update_progress(100, "Finalizando...")
+            self.update_progress(100, "Finishing...")
 
             # CRÍTICO: Atualizar a interface do Anki
             mw.reset()
@@ -197,13 +197,13 @@ class FilteredDeckManager(QDialog):
             # Ocultar barra de progresso
             self.show_progress(False)
 
-            showInfo(f"{count} decks criados com sucesso!")
+            showInfo(f"{count} decks created successfully!")
             self.accept()
 
         def on_failure(exc):
             """Callback em caso de erro"""
             self.show_progress(False)
-            showInfo(f"Erro ao criar decks: {str(exc)}")
+            showInfo(f"Error creating decks: {str(exc)}")
 
         # Executar operação usando QueryOp (padrão do Anki moderno)
         op = QueryOp(
@@ -216,73 +216,73 @@ class FilteredDeckManager(QDialog):
 
     def empty_decks(self):
         prefixes = ("00 -", "01 -", "02 -", "03 -", "05 -")
-        
+
         # Mostrar barra de progresso
         self.show_progress(True)
-        self.update_progress(0, "Procurando decks para remover...")
-        
+        self.update_progress(0, "Looking for decks to remove...")
+
         def remove_decks_op(col):
             """Operação que roda em background"""
             all_decks = col.decks.all_names_and_ids()
             count = 0
             deck_ids = []
-            
+
             # Coletar IDs dos decks a serem removidos
             mw.taskman.run_on_main(
-                lambda: self.update_progress(20, "Identificando decks...")
+                lambda: self.update_progress(20, "Identifying decks...")
             )
-            
+
             for d in all_decks:
                 if any(d.name.startswith(p) for p in prefixes):
                     deck_ids.append(d.id)
                     count += 1
-            
+
             if count == 0:
                 mw.taskman.run_on_main(
-                    lambda: self.update_progress(100, "Nenhum deck encontrado")
+                    lambda: self.update_progress(100, "No decks found")
                 )
                 return 0
-            
+
             # Remover os decks
             total = len(deck_ids)
             for idx, did in enumerate(deck_ids, 1):
                 progress = int(20 + (idx / total * 70))
                 mw.taskman.run_on_main(
-                    lambda p=progress: self.update_progress(p, f"Removendo deck {idx}/{total}...")
+                    lambda p=progress, i=idx, t=total: self.update_progress(p, f"Removing deck {i}/{t}...")
                 )
                 col.decks.remove([did])
-            
+
             mw.taskman.run_on_main(
-                lambda: self.update_progress(90, "Finalizando remoção...")
+                lambda: self.update_progress(90, "Finishing removal...")
             )
-            
+
             return count
 
         def on_success(count):
             """Callback quando a operação termina com sucesso"""
-            self.update_progress(100, "Concluído!")
-            
+            self.update_progress(100, "Done!")
+
             # CRÍTICO: Atualizar a interface do Anki
             mw.reset()
-            
+
             # Atualizar a tela de decks se estiver aberta
             if hasattr(mw, 'deckBrowser'):
                 mw.deckBrowser.refresh()
-            
+
             # Ocultar barra de progresso
             self.show_progress(False)
-            
+
             if count > 0:
-                showInfo(f"{count} decks removidos.")
+                showInfo(f"{count} decks removed.")
             else:
-                showInfo("Nenhum deck USMLE encontrado para remover.")
-            
+                showInfo("No USMLE decks found to remove.")
+
             self.accept()
 
         def on_failure(exc):
             """Callback em caso de erro"""
             self.show_progress(False)
-            showInfo(f"Erro ao remover decks: {str(exc)}")
+            showInfo(f"Error removing decks: {str(exc)}")
 
         # Executar operação usando QueryOp
         op = QueryOp(
@@ -370,7 +370,7 @@ def _run_auto_rebuild(today):
         config = load_config()
         config["last_build_day"] = today
         save_config(config)
-        tooltip("USMLE: decks reconstruídos automaticamente.")
+        tooltip("USMLE: decks rebuilt automatically.")
 
     def on_failure(exc):
         """Falha silenciosa"""
@@ -391,10 +391,10 @@ def inject_usmle_button():
         // Remover botão anterior se existir
         const oldBtn = document.getElementById('usmle-decks-btn');
         if (oldBtn) oldBtn.remove();
-        
+
         // Estratégia 1: Procurar por container com id específico
         let container = document.getElementById('top-right-btns');
-        
+
         // Estratégia 2: Procurar buttons existentes e pegar o pai deles
         if (!container) {
             const existingButtons = document.querySelectorAll('button');
@@ -405,7 +405,7 @@ def inject_usmle_button():
                 }
             }
         }
-        
+
         // Estratégia 3: Procurar por classes comuns de toolbar
         if (!container) {
             const possibleContainers = [
@@ -414,7 +414,7 @@ def inject_usmle_button():
                 document.querySelector('[style*="position: absolute"][style*="right"]'),
                 document.getElementById('topbutsOuter')
             ];
-            
+
             for (let c of possibleContainers) {
                 if (c) {
                     container = c;
@@ -422,7 +422,7 @@ def inject_usmle_button():
                 }
             }
         }
-        
+
         // Estratégia 4: Criar container se necessário
         if (!container) {
             container = document.createElement('div');
@@ -430,11 +430,11 @@ def inject_usmle_button():
             container.style.cssText = 'position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 9999;';
             document.body.appendChild(container);
         }
-        
+
         // Copiar estilo de um botão existente
         const existingBtn = document.querySelector('button');
         let copiedStyles = {};
-        
+
         if (existingBtn) {
             const computedStyle = window.getComputedStyle(existingBtn);
             copiedStyles = {
@@ -450,12 +450,12 @@ def inject_usmle_button():
                 transition: computedStyle.transition
             };
         }
-        
+
         // Criar o botão
         const btn = document.createElement('button');
         btn.id = 'usmle-decks-btn';
         btn.textContent = 'USMLE Decks';
-        
+
         // Aplicar estilos copiados ou usar fallback
         btn.style.cssText = `
             background-color: ${copiedStyles.backgroundColor || '#2c2c2c'};
@@ -471,7 +471,7 @@ def inject_usmle_button():
             white-space: nowrap;
             transition: ${copiedStyles.transition || 'all 0.2s ease'};
         `;
-        
+
         // Efeitos hover
         btn.onmouseover = function() {
             if (existingBtn) {
@@ -481,24 +481,24 @@ def inject_usmle_button():
                 this.style.backgroundColor = '#3c3c3c';
             }
         };
-        
+
         btn.onmouseout = function() {
             this.style.opacity = '1';
             this.style.transform = 'scale(1)';
             this.style.backgroundColor = copiedStyles.backgroundColor || '#2c2c2c';
         };
-        
+
         btn.onclick = function() {
             pycmd('usmle:open');
         };
-        
+
         // Adicionar o botão
         container.appendChild(btn);
-        
+
         console.log('USMLE button added with copied styles');
     })();
     """
-    
+
     if hasattr(mw, 'toolbar') and hasattr(mw.toolbar, 'web'):
         try:
             mw.toolbar.web.eval(js_code)
@@ -520,23 +520,23 @@ def handle_pycmd(handled, cmd, context):
 # Inicialização da UI do Anki
 def init_addon():
     # Adicionar ao menu Tools (backup)
-    action = QAction("⚡ Decks USMLE", mw)
+    action = QAction("⚡ USMLE Decks", mw)
     action.triggered.connect(on_show_manager)
     mw.form.menuTools.addAction(action)
-    
+
     # Hooks para adicionar o botão
     gui_hooks.webview_did_receive_js_message.append(handle_pycmd)
     gui_hooks.state_did_change.append(on_state_did_change)
 
     # Hook para auto-rebuild ao abrir perfil
     gui_hooks.profile_did_open.append(maybe_auto_rebuild)
-    
+
     # Tentar múltiplas vezes em diferentes momentos
     from aqt.qt import QTimer
-    
+
     def try_inject():
         inject_usmle_button()
-    
+
     gui_hooks.main_window_did_init.append(lambda: QTimer.singleShot(500, try_inject))
     gui_hooks.main_window_did_init.append(lambda: QTimer.singleShot(1000, try_inject))
     gui_hooks.main_window_did_init.append(lambda: QTimer.singleShot(2000, try_inject))
