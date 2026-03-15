@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from aqt import mw, gui_hooks
 from aqt.qt import *
-from aqt.utils import showInfo
+from aqt.utils import showInfo, tooltip
 from aqt.operations import QueryOp
 
 # Configurações de persistência
@@ -17,7 +17,7 @@ def load_config():
                 return json.load(f)
         except: 
             pass
-    return {"error_tag": "gmberro"}
+    return {"error_tag": "gmberro", "auto_rebuild": False, "last_build_day": -1}
 
 def save_config(config):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -39,6 +39,12 @@ class FilteredDeckManager(QDialog):
         layout.addWidget(QLabel("Tag de Erro:"))
         self.tag_input = QLineEdit(self.config["error_tag"])
         layout.addWidget(self.tag_input)
+
+        # Checkbox de reconstrução automática
+        self.auto_rebuild_checkbox = QCheckBox("Reconstrução automática diária")
+        self.auto_rebuild_checkbox.setChecked(self.config.get("auto_rebuild", False))
+        self.auto_rebuild_checkbox.stateChanged.connect(self.on_auto_rebuild_toggled)
+        layout.addWidget(self.auto_rebuild_checkbox)
 
         # Barra de progresso (inicialmente oculta)
         self.progress_label = QLabel("")
@@ -78,6 +84,14 @@ class FilteredDeckManager(QDialog):
         self.btn_empty.clicked.connect(self.empty_decks)
         layout.addWidget(self.btn_empty)
 
+        layout.addStretch()
+
+        credit = QLabel('<a href="https://github.com/drgmb" style="color: #888888; text-decoration: none; font-size: 10px;">crafted by drgmb</a>')
+        credit.setAlignment(Qt.AlignmentFlag.AlignRight)
+        credit.setOpenExternalLinks(True)
+        credit.setToolTip("github.com/drgmb")
+        layout.addWidget(credit)
+
         self.setLayout(layout)
 
     def show_progress(self, show=True):
@@ -101,6 +115,10 @@ class FilteredDeckManager(QDialog):
         if text:
             self.progress_label.setText(text)
 
+    def on_auto_rebuild_toggled(self, state):
+        self.config["auto_rebuild"] = (state == Qt.CheckState.Checked.value)
+        save_config(self.config)
+
     def build_decks(self):
         error_tag = self.tag_input.text().strip()
         self.config["error_tag"] = error_tag
@@ -117,8 +135,11 @@ class FilteredDeckManager(QDialog):
             (f"02 - Relative HY Cards [{self.date_str}]", 
              f"tag:*2-RelativelyHighYield (is:learn or is:due) prop:due<=0"),
             
-            (f"03 - Temporary HY Cards [{self.date_str}]", 
-             f"tag:*3-HighYield-temporary (is:learn or is:due) prop:due<=0")
+            (f"03 - Temporary HY Cards [{self.date_str}]",
+             f"tag:*3-HighYield-temporary (is:learn or is:due) prop:due<=0"),
+
+            (f"05 - NEW + {error_tag} + HY (1,2,3) [{self.date_str}]",
+             f"tag:*{error_tag} (tag:*1-HighYield or tag:*2-RelativelyHighYield or tag:*3-HighYield-temporary) is:new")
         ]
 
         # Mostrar barra de progresso
@@ -160,17 +181,22 @@ class FilteredDeckManager(QDialog):
         def on_success(count):
             """Callback quando a operação termina com sucesso"""
             self.update_progress(100, "Finalizando...")
-            
+
             # CRÍTICO: Atualizar a interface do Anki
             mw.reset()
-            
+
             # Atualizar a tela de decks se estiver aberta
             if hasattr(mw, 'deckBrowser'):
                 mw.deckBrowser.refresh()
-            
+
+            # Salvar last_build_day para evitar auto-rebuild no mesmo dia
+            if mw.col is not None:
+                self.config["last_build_day"] = mw.col.sched.today
+                save_config(self.config)
+
             # Ocultar barra de progresso
             self.show_progress(False)
-            
+
             showInfo(f"{count} decks criados com sucesso!")
             self.accept()
 
@@ -189,7 +215,7 @@ class FilteredDeckManager(QDialog):
         op.run_in_background()
 
     def empty_decks(self):
-        prefixes = ("00 -", "01 -", "02 -", "03 -")
+        prefixes = ("00 -", "01 -", "02 -", "03 -", "05 -")
         
         # Mostrar barra de progresso
         self.show_progress(True)
@@ -270,6 +296,93 @@ class FilteredDeckManager(QDialog):
 def on_show_manager():
     dialog = FilteredDeckManager(mw)
     dialog.exec()
+
+def maybe_auto_rebuild():
+    config = load_config()
+    if not config.get("auto_rebuild", False):
+        return
+    if mw.col is None:
+        return
+    today = mw.col.sched.today
+    if config.get("last_build_day", -1) == today:
+        return
+    # Day changed: rebuild silently
+    _run_auto_rebuild(today)
+
+def _run_auto_rebuild(today):
+    """Executa rebuild automático silencioso"""
+    config = load_config()
+    error_tag = config.get("error_tag", "gmberro")
+    date_str = datetime.now().strftime("%d/%m/%y")
+    prefixes = ("00 -", "01 -", "02 -", "03 -", "05 -")
+
+    decks_to_create = [
+        (f"00 - {error_tag} + HY (1,2,3) [{date_str}]",
+         f"tag:*{error_tag} (tag:*1-HighYield or tag:*2-RelativelyHighYield or tag:*3-HighYield-temporary) is:due"),
+
+        (f"01 - HY Cards [{date_str}]",
+         f"tag:*1-HighYield (is:learn or is:due) prop:due<=0"),
+
+        (f"02 - Relative HY Cards [{date_str}]",
+         f"tag:*2-RelativelyHighYield (is:learn or is:due) prop:due<=0"),
+
+        (f"03 - Temporary HY Cards [{date_str}]",
+         f"tag:*3-HighYield-temporary (is:learn or is:due) prop:due<=0"),
+
+        (f"05 - NEW + {error_tag} + HY (1,2,3) [{date_str}]",
+         f"tag:*{error_tag} (tag:*1-HighYield or tag:*2-RelativelyHighYield or tag:*3-HighYield-temporary) is:new")
+    ]
+
+    def remove_decks_op(col):
+        """Remove decks existentes"""
+        all_decks = col.decks.all_names_and_ids()
+        deck_ids = []
+        for d in all_decks:
+            if any(d.name.startswith(p) for p in prefixes):
+                deck_ids.append(d.id)
+        for did in deck_ids:
+            col.decks.remove([did])
+        return len(deck_ids)
+
+    def create_decks_op(col):
+        """Cria novos decks"""
+        for name, query in decks_to_create:
+            did = col.decks.new_filtered(name)
+            deck = col.decks.get(did)
+            deck['terms'][0][0] = query
+            deck['terms'][0][1] = 999
+            deck['resched'] = True
+            col.decks.save(deck)
+            col.sched.rebuild_filtered_deck(did)
+        return len(decks_to_create)
+
+    def combined_op(col):
+        """Remove e recria decks"""
+        remove_decks_op(col)
+        return create_decks_op(col)
+
+    def on_success(count):
+        """Callback silencioso"""
+        mw.reset()
+        if hasattr(mw, 'deckBrowser'):
+            mw.deckBrowser.refresh()
+        # Salvar last_build_day
+        config = load_config()
+        config["last_build_day"] = today
+        save_config(config)
+        tooltip("USMLE: decks reconstruídos automaticamente.")
+
+    def on_failure(exc):
+        """Falha silenciosa"""
+        pass
+
+    op = QueryOp(
+        parent=mw,
+        op=combined_op,
+        success=on_success
+    )
+    op.failure(on_failure)
+    op.run_in_background()
 
 def inject_usmle_button():
     """Injeta o botão USMLE na toolbar com estilo idêntico aos existentes"""
@@ -414,6 +527,9 @@ def init_addon():
     # Hooks para adicionar o botão
     gui_hooks.webview_did_receive_js_message.append(handle_pycmd)
     gui_hooks.state_did_change.append(on_state_did_change)
+
+    # Hook para auto-rebuild ao abrir perfil
+    gui_hooks.profile_did_open.append(maybe_auto_rebuild)
     
     # Tentar múltiplas vezes em diferentes momentos
     from aqt.qt import QTimer

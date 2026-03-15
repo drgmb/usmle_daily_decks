@@ -1,0 +1,8 @@
+{
+    "name": "USMLE Daily Decks",
+    "package": "usmle_daily_decks",
+    "author": "drgmb",
+    "homepage": "https://github.com/drgmb/usmle_daily_decks",
+    "conflicts": [],
+    "min_point_version": 50
+}
