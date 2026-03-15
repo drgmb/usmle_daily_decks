@@ -4,6 +4,8 @@
 
 Automates daily filtered deck creation for USMLE study using High Yield tags. Eliminates the manual overhead of rebuilding filtered decks each day so you can focus on reviews.
 
+![USMLE Daily Decks Demo](use.gif)
+
 ## Features
 
 - Filtered deck creation from HY tags (`1-HighYield`, `2-RelativelyHighYield`, `3-HighYield-temporary`)
@@ -32,15 +34,14 @@ Download `.ankiaddon` → Tools → Add-ons → Install from file
 
 ## Setup
 
-1. Open **Tools → ⚡ Decks USMLE**
+1. Open **Tools → ⚡ USMLE Decks**
 2. Set your error tag (default: `gmberro`)
-3. Optionally enable **"Reconstrução automática diária"** for automatic daily rebuild
-4. Click **"Construir Decks Diários"**
+3. Optionally enable **"Automatic daily rebuild"**
+4. Click **"Build Daily Decks"**
 
 ## Requirements
 
 - Anki 23.10 or later
-- Note: deck names use Brazilian Portuguese labels in the UI
 
 ## How Auto-Rebuild Works
 
